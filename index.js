@@ -24,7 +24,125 @@ const auth = new google.auth.GoogleAuth({
 const sheets = google.sheets({ version: 'v4', auth });
 
 let modoBot = true;
+// FUNÇÃO PARA PEGAR A PRÓXIMA LINHA VAZIA
+async function proximaLinhaVazia() {
+  try {
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${SHEET_NAME}!Q:Q`
+    });
+    const valores = response.data.values || [];
+    return valores.length + 3;
+  } catch (error) {
+    console.error('Erro ao buscar linha:', error);
+    return 100;
+  }
+}
 
+// FUNÇÃO PARA SALVAR FORMULÁRIO COMPLETO + 2 LINHAS VAZIAS
+async function salvarFormularioCompleto(textoCompleto) {
+  try {
+    const linha = await proximaLinhaVazia();
+    
+    // Salvar o formulário completo na coluna Q
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${SHEET_NAME}!Q${linha}`,
+      valueInputOption: 'USER_ENTERED',
+      requestBody: {
+        values: [[textoCompleto]]
+      }
+    });
+    
+    console.log('Formulário completo salvo na linha', linha);
+    return linha;
+  } catch (error) {
+    console.error('Erro ao salvar formulário:', error);
+    return 0;
+  }
+}
+
+// FUNÇÃO PARA VERIFICAR LINKS NOVOS E MANDAR MENSAGEM
+async function verificarLinksNovos() {
+  try {
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${SHEET_NAME}!Q:S`
+    });
+    
+    const linhas = response.data.values || [];
+    
+    for (let i = 0; i < linhas.length; i++) {
+      const link = linhas[i][1]; // Coluna R
+      const status = linhas[i][2]; // Coluna S
+      const formulario = linhas[i][0]; // Coluna Q
+      
+      // Se tem link na coluna R e status NÃO é ENVIADO
+      if (link && link.includes('http') && status !== 'ENVIADO') {
+        // Extrair WhatsApp do formulário
+        const linhasFormulario = formulario.split('\n');
+                let whatsapp = '';
+        
+        linhasFormulario.forEach(linha => {
+          if (linha.includes('WhatsApp:') && !whatsapp) {
+            whatsapp = linha.split(':')[1].trim();
+          }
+        });
+        
+        if (!whatsapp) {
+          linhasFormulario.forEach(linha => {
+            if (linha.includes('Enviar site para:')) {
+              whatsapp = linha.split(':')[1].trim();
+            }
+          });
+        }
+        
+        // Extrair nome do cliente
+        let nome = '';
+        linhasFormulario.forEach(linha => {
+          if (linha.includes('Nome:') && !nome) {
+            nome = linha.split(':')[1].trim();
+          }
+        });
+        
+        // Mandar mensagem
+        if (whatsapp) {
+          const mensagem = `🎉 ${nome}, seu site está pronto!\n\n🔗 Acesse: ${link}\n\n📱 Qualquer dúvida, me chame!`;
+          
+          await fetch(`https://graph.facebook.com/v18.0/${PHONE_NUMBER_ID}/messages`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${WHATSAPP_TOKEN}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              messaging_product: "whatsapp",
+              to: whatsapp,
+              text: { body: mensagem }
+            })
+          });
+          
+          // Marcar como ENVIADO na coluna S
+          await sheets.spreadsheets.values.update({
+            spreadsheetId: SPREADSHEET_ID,
+            range: `${SHEET_NAME}!S${i + 1}`,
+            valueInputOption: 'USER_ENTERED',
+            requestBody: {
+              values: [['ENVIADO']]
+            }
+          });
+          
+          console.log('Mensagem enviada para', nome);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Erro ao verificar links:', error);
+  }
+}
+
+// VERIFICAR LINKS A CADA 10 MINUTOS
+setInterval(verificarLinksNovos, 600000);
 async function salvarNaPlanilha(dados) {
   try {
     await sheets.spreadsheets.values.append({
@@ -125,7 +243,8 @@ app.post('/webhook', async (req, res) => {
         '',               // N - Bônus (preenche depois)
         'PENDENTE'        // O - Status
       ]);
-      
+            // Salvar formulário completo na coluna Q
+      await salvarFormularioCompleto(text);
       return res.sendStatus(200);
     }
     if (text.toUpperCase().includes('MODO HUMANO')) {
