@@ -48,7 +48,86 @@ app.post('/webhook', async (req, res) => {
     const message = body.entry[0].changes[0].value.messages[0];
     const from = message.from;
     const text = message.text ? message.text.body : '';
-    
+    if (text.includes('NOVO CADASTRO DE AFILIADO')) {
+      const linhas = text.split('\n');
+      let indicadorNome = '';
+      let afiliadoNome = '';
+      let afiliadoInstagram = '';
+      let afiliadoWhatsApp = '';
+      let afiliadoPix = '';
+      
+      linhas.forEach(linha => {
+        if (linha.includes('Nome do Indicador:')) indicadorNome = linha.split(':')[1].trim();
+        if (linha.includes('Nome do Afiliado:')) afiliadoNome = linha.split(':')[1].trim();
+        if (linha.includes('Instagram do Afiliado:')) afiliadoInstagram = linha.split(':')[1].trim();
+        if (linha.includes('WhatsApp do Afiliado:')) afiliadoWhatsApp = linha.split(':')[1].trim();
+        if (linha.includes('Chave Pix do Afiliado:')) afiliadoPix = linha.split(':')[1].trim();
+      });
+      
+      const dataAtual = new Date().toLocaleDateString('pt-BR');
+      
+      await salvarNaPlanilha([
+        dataAtual,        // A - Data
+        'CADASTRO',       // B - Tipo
+        afiliadoNome,     // C - Nome do Afiliado
+        '',               // D - Cupom (você cria depois)
+        afiliadoInstagram,// E - Instagram
+        afiliadoWhatsApp, // F - WhatsApp
+        afiliadoPix,      // G - Pix do Afiliado
+        indicadorNome,    // H - Quem Indicou
+        '',               // I - Pix do Indicador
+        '-',              // J - Cliente
+        '-',              // K - Plano
+        '-',              // L - Valor
+        '-',              // M - Comissão
+        '-',              // N - Bônus
+        'ATIVO'           // O - Status
+      ]);
+      
+      return res.sendStatus(200);
+    }
+
+    // DETECTAR VENDA (PEDIDO DE SITE)
+    if (text.includes('NOVO PEDIDO DE SITE') || text.includes('PAGAMENTO APROVADO')) {
+      const linhas = text.split('\n');
+      let clienteNome = '';
+      let plano = '';
+      let valor = '';
+      let afiliadoNome = '';
+      let afiliadoCupom = '';
+      
+      linhas.forEach(linha => {
+        if (linha.includes('Nome:') && !clienteNome) clienteNome = linha.split(':')[1].trim();
+        if (linha.includes('Plano:')) plano = linha.split(':')[1].trim();
+        if (linha.includes('Valor:')) valor = linha.split(':')[1].trim().replace('R$ ', '').replace(',', '.');
+        if (linha.includes('Nome do Afiliado:')) afiliadoNome = linha.split(':')[1].trim();
+        if (linha.includes('Cupom do Afiliado:')) afiliadoCupom = linha.split(':')[1].trim();
+      });
+      
+      const valorNum = parseFloat(valor) || 0;
+      const comissao = (valorNum * 0.3).toFixed(2).replace('.', ',');
+      const dataAtual = new Date().toLocaleDateString('pt-BR');
+      
+      await salvarNaPlanilha([
+        dataAtual,        // A - Data
+        'VENDA',          // B - Tipo
+        afiliadoNome,     // C - Nome do Afiliado
+        afiliadoCupom,    // D - Cupom
+        '-',              // E - Instagram
+        '-',              // F - WhatsApp
+        '-',              // G - Pix do Afiliado
+        '',               // H - Quem Indicou (preenche depois)
+        '',               // I - Pix do Indicador
+        clienteNome,      // J - Cliente
+        plano,            // K - Plano
+        valorNum,         // L - Valor
+        comissao,         // M - Comissão
+        '',               // N - Bônus (preenche depois)
+        'PENDENTE'        // O - Status
+      ]);
+      
+      return res.sendStatus(200);
+    }
     if (text.toUpperCase().includes('MODO HUMANO')) {
       modoBot = false;
       await enviarMensagem(from, "...");
