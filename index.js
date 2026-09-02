@@ -1,4 +1,7 @@
 // BOT AGENDA AI PRO - Groq + WhatsApp + Google Sheets
+const makeWASocket = require('@whiskeysockets/baileys').default;
+const { useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const qrcode = require('qrcode-terminal');
 const express = require('express');
 const Groq = require('groq-sdk');
 const { google } = require('googleapis');
@@ -24,6 +27,79 @@ const auth = new google.auth.GoogleAuth({
 const sheets = google.sheets({ version: 'v4', auth });
 
 let modoBot = true;
+// Conexão Baileys (WhatsApp)
+let sock;
+
+async function conectarBaileys() {
+  const { state, saveCreds } = await useMultiFileAuthState('auth');
+  
+  sock = makeWASocket({
+    auth: state,
+    printQRInTerminal: true
+  });
+  
+  sock.ev.on('creds.update', saveCreds);
+  
+  sock.ev.on('connection.update', (update) => {
+    const { connection, lastDisconnect, qr } = update;
+    
+    if (qr) {
+      qrcode.generate(qr, { small: true });
+      console.log('📱 ESCANEIE O QR CODE NO WHATSAPP!');
+    }
+    
+    if (connection === 'close') {
+      const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+      if (shouldReconnect) {
+        conectarBaileys();
+      }
+    }
+  });
+  
+  sock.ev.on('messages.upsert', async ({ messages }) => {
+    const msg = messages[0];
+    if (!msg.message || !msg.key.remoteUser) return;
+    
+    const from = msg.key.remoteUser;
+    const text = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
+    
+    if (!text) return;
+    
+    // Comandos MODO HUMANO/BOT
+    if (text.toUpperCase().includes('MODO HUMANO')) {
+      modoBot = false;
+      await sock.sendMessage(from, { text: '...' });
+      return;
+    }
+    
+    if (text.toUpperCase().includes('MODO BOT')) {
+      modoBot = true;
+      await sock.sendMessage(from, { text: '...' });
+      return;
+    }
+    
+    if (modoBot) {
+      try {
+        const response = await groq.chat.completions.create({
+          messages: [
+            { role: "system", content: PROMPT_BOT },
+            { role: "user", content: text }
+          ],
+          model: "llama-3.1-70b-versatile",
+          temperature: 0.7,
+          max_tokens: 400
+        });
+        
+        const botReply = response.choices[0].message.content;
+        await sock.sendMessage(from, { text: botReply });
+      } catch (error) {
+        console.error('Erro Groq:', error);
+      }
+    }
+  });
+}
+
+conectarBaileys();
 // FUNÇÃO PARA PEGAR A PRÓXIMA LINHA VAZIA
 async function proximaLinhaVazia() {
   try {
