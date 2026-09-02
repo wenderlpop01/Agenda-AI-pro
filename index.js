@@ -2,24 +2,10 @@
 const express = require('express');
 const Groq = require('groq-sdk');
 const { google } = require('googleapis');
-let makeWASocket, useMultiFileAuthState, DisconnectReason, qrcode;
-
-(async () => {
-  const baileys = await import('@whiskeysockets/baileys');
-  const baileysModule = baileys.default || baileys;
-  
-  makeWASocket = baileysModule.default || baileysModule;
-  useMultiFileAuthState = baileysModule.useMultiFileAuthState;
-  DisconnectReason = baileysModule.DisconnectReason;
-  
-  const qr = await import('qrcode-terminal');
-  qrcode = qr.default || qr;
-  
-    // Iniciar conexão após carregar
-  setTimeout(() => {
-    conectarBaileys();
-  }, 2000);
-  })();
+const makeWASocket = require('@whiskeysockets/baileys').default;
+const { useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const qrcode = require('qrcode-terminal');
+conectarBaileys();
 
 const app = express();
 app.use(express.json());
