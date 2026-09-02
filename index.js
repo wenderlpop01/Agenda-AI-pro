@@ -1,10 +1,20 @@
 // BOT AGENDA AI PRO - Groq + WhatsApp + Google Sheets
-const makeWASocket = require('@whiskeysockets/baileys').default;
-const { useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
-const qrcode = require('qrcode-terminal');
 const express = require('express');
 const Groq = require('groq-sdk');
 const { google } = require('googleapis');
+
+let makeWASocket, useMultiFileAuthState, DisconnectReason, qrcode;
+
+(async () => {
+  const baileys = await import('@whiskeysockets/baileys');
+  makeWASocket = baileys.default;
+  useMultiFileAuthState = baileys.useMultiFileAuthState;
+  DisconnectReason = baileys.DisconnectReason;
+  
+  const qr = await import('qrcode-terminal');
+  qrcode = qr.default;
+})();
+
 const app = express();
 app.use(express.json());
 
