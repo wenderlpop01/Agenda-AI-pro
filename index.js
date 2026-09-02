@@ -33,7 +33,9 @@ let modoBot = true;
 let sock;
 
 async function conectarBaileys() {
-  const { state, saveCreds } = await useMultiFileAuthState('auth');
+  const { state, saveCreds } = await useMultiFileAuthState('auth', {
+    useStore: false
+  });
   
   sock = makeWASocket({
     auth: state,
