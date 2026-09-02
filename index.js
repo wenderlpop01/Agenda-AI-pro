@@ -96,6 +96,14 @@ async function verificarLinksNovos() {
             }
           });
         }
+
+        // Limpar número e adicionar 55
+        if (whatsapp) {
+          whatsapp = whatsapp.replace(/\D/g, '');
+          if (!whatsapp.startsWith('55')) {
+            whatsapp = '55' + whatsapp;
+          }
+        }
         
         // Extrair nome do cliente
         let nome = '';
